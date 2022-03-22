@@ -4,68 +4,31 @@ import path from "path"
 import fsp from "fs/promises"
 import EventEmitter from "events"
 
-// Next.js style page routes
-// https://nextjs.org/docs/routing/introduction
-//
-// Examples:
-//   pages/index.js → /
-//   pages/blog/index.js → /blog
-// nested
-//   pages/blog/first-post.js → /blog/first-post
-//   pages/dashboard/settings/username.js → /dashboard/settings/username
-// dynamic
-//   pages/blog/[slug].js → /blog/:slug (/blog/hello-world)
-//   pages/[username]/settings.js → /:username/settings (/foo/settings)
-//   pages/post/[...all].js → /post/* (/post/2020/id/title)
+import type { ReactRouterRoute, Route, UserOptions } from "./types"
 
-type Options = {
-  /**
-   * The path to the directory containing your page routes
-   * @default <rootDir>/src/pages
-   */
-  pagesDir?: string
-  /**
-   * Supported file extensions for page routes
-   * @default ['.tsx']
-   */
-  pageExtensions?: Array<string>
-  /**
-   * Development build
-   */
-  isDev: boolean
-  /**
-   * @default false
-   */
-  caseSensitive?: boolean
-  /**
-   * @default 5
-   */
-  reactRouterVersion?: number
-}
-
-export const PageRoutesPlugin = createUnplugin<Options>((options) => {
+export const FsRoutesPlugin = createUnplugin<UserOptions>((options) => {
   // Include file extension to avoid being processed by file loader fallback in CRA
   // otherwise would not be needed i.e. custom webpack config.
   // https://github.com/facebook/create-react-app/blob/eee8491d57d67dd76f0806a7512eaba2ce9c36f0/packages/react-scripts/config/webpack.config.js#L509
-  const MODULE_IDS = ["~fs-routes.js", "~fs-routes.ts"]
+  const VIRTUAL_ROUTE_IDS = ["~fs-routes.js", "~fs-routes.ts"]
 
   const ctx = new Context(options)
 
   return {
-    name: "page-routes-unplugin",
+    name: "webpack-fs-routes-unplugin",
 
     buildStart() {
       ctx.init()
     },
 
     resolveId(id, importer) {
-      if (!MODULE_IDS.includes(id)) return null
+      if (!VIRTUAL_ROUTE_IDS.includes(id)) return null
       ctx.emit("importRoutes", importer)
       return id
     },
 
     async load(id) {
-      if (!MODULE_IDS.includes(id)) return null
+      if (!VIRTUAL_ROUTE_IDS.includes(id)) return null
       return ctx.resolveRoutes()
     },
 
@@ -74,32 +37,33 @@ export const PageRoutesPlugin = createUnplugin<Options>((options) => {
   }
 })
 
-export default PageRoutesPlugin.webpack
+export default FsRoutesPlugin.webpack
 
+//////////////////////////////////////////////////////////////////////
 class Context extends EventEmitter {
   routeMap = new Map<string, { path: string; route: string }>()
   caseSensitive: boolean
 
-  private _pagesDir: string
-  private _pageExtensions: Array<string>
+  private _routesDir: string
+  private _routeExtensions: Array<string>
   private _isDev: boolean
   private _routesImporter?: string
   // private _devServer: WebpackDevServer | null = null;
 
   constructor({
-    pagesDir,
-    pageExtensions,
+    routesDir,
+    routeExtensions,
     isDev,
     caseSensitive,
   }: {
-    pagesDir?: string
-    pageExtensions?: Array<string>
+    routesDir?: string
+    routeExtensions?: Array<string>
     isDev?: boolean
     caseSensitive?: boolean
   } = {}) {
     super()
-    this._pagesDir = pagesDir ?? path.join("src", "pages")
-    this._pageExtensions = pageExtensions ?? [".tsx"]
+    this._routesDir = routesDir ?? path.resolve("src/pages")
+    this._routeExtensions = routeExtensions ?? [".tsx"]
     this._isDev = isDev ?? false
     this.caseSensitive = caseSensitive ?? false
   }
@@ -119,31 +83,32 @@ class Context extends EventEmitter {
       })
     }
 
-    this._searchPages()
+    this._searchGlob()
   }
 
   resolveRoutes() {
     return resolveRoutes(this)
   }
 
-  async _searchPages() {
-    for (const page of await this._getFiles(this._pagesDir)) {
-      await this._addPage(page)
+  // TODO: use glob instead of fs.readdir to exclude test files
+  async _searchGlob() {
+    for (const route of await this._getFiles(this._routesDir)) {
+      await this._addRoute(route)
     }
   }
 
   _setupWatcher() {
     const watcher = chokidar
-      .watch(this._pagesDir, {
+      .watch(this._routesDir, {
         persistent: true,
         ignoreInitial: true,
       })
-      .on("add", async (page) => {
-        this._addPage(page)
+      .on("add", async (route) => {
+        this._addRoute(route)
         this._invalidate()
       })
-      .on("unlink", async (page) => {
-        this._removePage(page)
+      .on("unlink", async (route) => {
+        this._removeRoute(route)
         this._invalidate()
       })
 
@@ -161,25 +126,22 @@ class Context extends EventEmitter {
     // this._devServer.invalidate(); // didn't work :/
   }
 
-  _addPage(page: string) {
-    const route = path
-      .relative(this._pagesDir, page)
-      .replace(path.extname(page), "")
-
+  _addRoute(route: string) {
     // Example:
-    // importer: <rootDir>/_virtual_~fs-routes.js
-    // importee: import Route53 from './src/pages/index.tsx'
-    this.routeMap.set(page, {
-      path: "./" + page,
-      route,
+    //   importer: <rootDir>/_virtual_~fs-routes.js
+    //   importee: import Route53 from './src/pages/index.tsx'
+    this.routeMap.set(route, {
+      path: "./" + route,
+      route: path
+        .relative(this._routesDir, route)
+        .replace(path.extname(route), ""),
     })
   }
 
-  _removePage(page: string) {
-    this.routeMap.delete(page)
+  _removeRoute(route: string) {
+    this.routeMap.delete(route)
   }
 
-  // TODO: use glob instead of fs.readdir to exclude test files
   async _getFiles(dir: string) {
     const res: Array<string> = []
     for (const filename of await fsp.readdir(dir)) {
@@ -189,7 +151,7 @@ class Context extends EventEmitter {
       if (stat.isDirectory()) {
         res.push(...(await this._getFiles(file)))
       } else if (stat.isFile()) {
-        if (this._pageExtensions.includes(path.extname(file))) {
+        if (this._routeExtensions.includes(path.extname(file))) {
           res.push(file)
         }
       }
@@ -198,26 +160,7 @@ class Context extends EventEmitter {
   }
 }
 
-interface Route {
-  /**
-   * name or identifier of current route
-   */
-  name: string
-  /**
-   * <Route path />
-   */
-  path: string
-  /**
-   * import specifier of <Route component />
-   */
-  component: string
-  /**
-   * child routes
-   * @default []
-   */
-  children?: Array<Route>
-}
-
+//////////////////////////////////////////////////////////////////////
 const DYNAMIC_ROUTE_RE = /^\[(.+)\]$/
 const CATCH_ALL_ROUTE_RE = /^\[\.{3}/
 
@@ -250,7 +193,7 @@ async function resolveRoutes(ctx: Context) {
     return { name: normalizedName, path: normalizedPathNode }
   }
 
-  const pageRoutes = [...routeMap.values()].sort((a, b) => {
+  const fsRoutes = [...routeMap.values()].sort((a, b) => {
     // parent route first, catchall route last
     const slashCount = (s: string) => s.split("/").filter(Boolean).length
     if (CATCH_ALL_ROUTE_RE.test(a.route)) {
@@ -263,13 +206,13 @@ async function resolveRoutes(ctx: Context) {
   })
   const routes: Array<Route> = []
 
-  pageRoutes.forEach((page) => {
-    const pathNodes = page.route.split("/")
+  fsRoutes.forEach((fsRoute) => {
+    const pathNodes = fsRoute.route.split("/")
     let parentRoutes = routes
     const route: Route = {
       path: "",
       name: "",
-      component: page.path,
+      component: fsRoute.path,
     }
 
     for (let i = 0; i < pathNodes.length; i++) {
@@ -292,19 +235,6 @@ async function resolveRoutes(ctx: Context) {
   // TODO:
   // debugger
   return code
-}
-
-interface ReactRouterRoute extends Omit<Route, "name" | "children"> {
-  /**
-   * <Route exact />
-   * @default false
-   */
-  exact?: boolean
-  /**
-   * child routes
-   * @default []
-   */
-  routes?: Array<ReactRouterRoute>
 }
 
 function prepareReactRoutes(routes: Array<Route>): Array<ReactRouterRoute> {
