@@ -6,13 +6,20 @@
     "access": "public"
   },
   "files": [
-    "dist"
+    "dist",
+    "client.d.ts",
+    "LICENSE"
   ],
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "exports": {
-    "require": "./dist/index.js",
-    "import": "./dist/index.mjs"
+    ".": {
+      "require": "./dist/index.js",
+      "import": "./dist/index.mjs"
+    },
+    "./client": {
+      "types": "./client.d.ts"
+    }
   },
   "types": "./dist/index.d.ts",
   "scripts": {

@@ -2,6 +2,7 @@ import { createUnplugin } from "unplugin"
 import chokidar from "chokidar"
 import path from "path"
 import fsp from "fs/promises"
+import EventEmitter from "events"
 
 // Next.js style page routes
 // https://nextjs.org/docs/routing/introduction
@@ -18,13 +19,35 @@ import fsp from "fs/promises"
 //   pages/post/[...all].js → /post/* (/post/2020/id/title)
 
 type Options = {
-  pagesDir: string
+  /**
+   * The path to the directory containing your page routes
+   * @default <rootDir>/src/pages
+   */
+  pagesDir?: string
+  /**
+   * Supported file extensions for page routes
+   * @default ['.tsx']
+   */
+  pageExtensions?: Array<string>
+  /**
+   * Development build
+   */
   isDev: boolean
+  /**
+   * @default false
+   */
   caseSensitive?: boolean
+  /**
+   * @default 5
+   */
+  reactRouterVersion?: number
 }
 
 export const PageRoutesPlugin = createUnplugin<Options>((options) => {
-  const MODULE_ID = "~routes"
+  // Include file extension to avoid being processed by file loader fallback in CRA
+  // otherwise would not be needed i.e. custom webpack config.
+  // https://github.com/facebook/create-react-app/blob/eee8491d57d67dd76f0806a7512eaba2ce9c36f0/packages/react-scripts/config/webpack.config.js#L509
+  const MODULE_IDS = ["~fs-routes.js", "~fs-routes.ts"]
 
   const ctx = new Context(options)
 
@@ -35,13 +58,14 @@ export const PageRoutesPlugin = createUnplugin<Options>((options) => {
       ctx.init()
     },
 
-    resolveId(id) {
-      if (id !== MODULE_ID) return null
+    resolveId(id, importer) {
+      if (!MODULE_IDS.includes(id)) return null
+      ctx.emit("importRoutes", importer)
       return id
     },
 
     async load(id) {
-      if (id !== MODULE_ID) return null
+      if (!MODULE_IDS.includes(id)) return null
       return ctx.resolveRoutes()
     },
 
@@ -52,20 +76,30 @@ export const PageRoutesPlugin = createUnplugin<Options>((options) => {
 
 export default PageRoutesPlugin.webpack
 
-class Context {
+class Context extends EventEmitter {
   routeMap = new Map<string, { path: string; route: string }>()
   caseSensitive: boolean
 
   private _pagesDir: string
+  private _pageExtensions: Array<string>
   private _isDev: boolean
+  private _routesImporter?: string
   // private _devServer: WebpackDevServer | null = null;
 
   constructor({
     pagesDir,
+    pageExtensions,
     isDev,
     caseSensitive,
-  }: { pagesDir?: string; isDev?: boolean; caseSensitive?: boolean } = {}) {
-    this._pagesDir = pagesDir ?? "pages"
+  }: {
+    pagesDir?: string
+    pageExtensions?: Array<string>
+    isDev?: boolean
+    caseSensitive?: boolean
+  } = {}) {
+    super()
+    this._pagesDir = pagesDir ?? path.join("src", "pages")
+    this._pageExtensions = pageExtensions ?? [".tsx"]
     this._isDev = isDev ?? false
     this.caseSensitive = caseSensitive ?? false
   }
@@ -79,16 +113,20 @@ class Context {
           process.exit()
         })
       })
+
+      this.once("importRoutes", (importer) => {
+        this._routesImporter = importer
+      })
     }
 
-    this._searchGlob()
+    this._searchPages()
   }
 
   resolveRoutes() {
     return resolveRoutes(this)
   }
 
-  async _searchGlob() {
+  async _searchPages() {
     for (const page of await this._getFiles(this._pagesDir)) {
       await this._addPage(page)
     }
@@ -114,8 +152,11 @@ class Context {
 
   async _invalidate() {
     // TODO: figure out a better way to invalidate for hmr
-    const routesImporter = path.resolve("src/routes.ts")
-    await fsp.writeFile(routesImporter, await fsp.readFile(routesImporter))
+    this._routesImporter &&
+      (await fsp.writeFile(
+        this._routesImporter,
+        await fsp.readFile(this._routesImporter),
+      ))
     // @ts-ignore
     // this._devServer.invalidate(); // didn't work :/
   }
@@ -124,8 +165,12 @@ class Context {
     const route = path
       .relative(this._pagesDir, page)
       .replace(path.extname(page), "")
+
+    // Example:
+    // importer: <rootDir>/_virtual_~fs-routes.js
+    // importee: import Route53 from './src/pages/index.tsx'
     this.routeMap.set(page, {
-      path: page,
+      path: "./" + page,
       route,
     })
   }
@@ -134,6 +179,7 @@ class Context {
     this.routeMap.delete(page)
   }
 
+  // TODO: use glob instead of fs.readdir to exclude test files
   async _getFiles(dir: string) {
     const res: Array<string> = []
     for (const filename of await fsp.readdir(dir)) {
@@ -143,8 +189,7 @@ class Context {
       if (stat.isDirectory()) {
         res.push(...(await this._getFiles(file)))
       } else if (stat.isFile()) {
-        // only include jsx/tsx as route files
-        if ([".jsx", ".tsx"].includes(path.extname(file))) {
+        if (this._pageExtensions.includes(path.extname(file))) {
           res.push(file)
         }
       }
@@ -154,28 +199,64 @@ class Context {
 }
 
 interface Route {
-  path: string
-  component: string
+  /**
+   * name or identifier of current route
+   */
   name: string
-  exact?: boolean
+  /**
+   * <Route path />
+   */
+  path: string
+  /**
+   * import specifier of <Route component />
+   */
+  component: string
+  /**
+   * child routes
+   * @default []
+   */
   children?: Array<Route>
 }
 
-const dynamicRouteRE = /^\[(.+)\]$/
-const catchAllRouteRE = /^\[\.{3}/
+const DYNAMIC_ROUTE_RE = /^\[(.+)\]$/
+const CATCH_ALL_ROUTE_RE = /^\[\.{3}/
 
 async function resolveRoutes(ctx: Context) {
   const { routeMap, caseSensitive } = ctx
+
   const normalizeCase = (str: string) =>
     caseSensitive ? str : str.toLowerCase()
+  const isIndexRoute = (node: string) => normalizeCase(node) === "index"
+  const buildRoutePathAndName = (node: string) => {
+    const isDynamic = DYNAMIC_ROUTE_RE.test(node)
+    const isCatchAll = CATCH_ALL_ROUTE_RE.test(node)
+    const normalizedName = isDynamic
+      ? isCatchAll
+        ? "all"
+        : node.replace(DYNAMIC_ROUTE_RE, "$1")
+      : node
+    let normalizedPathNode = normalizeCase(normalizedName)
+    if (isIndexRoute(node)) {
+      normalizedPathNode = "/"
+    } else if (isDynamic) {
+      if (isCatchAll) {
+        normalizedPathNode = "/(.*)"
+      } else {
+        normalizedPathNode = `/:${normalizedPathNode}`
+      }
+    } else {
+      normalizedPathNode = `/${normalizedPathNode}`
+    }
+    return { name: normalizedName, path: normalizedPathNode }
+  }
 
   const pageRoutes = [...routeMap.values()].sort((a, b) => {
     // parent route first, catchall route last
     const slashCount = (s: string) => s.split("/").filter(Boolean).length
-    if (catchAllRouteRE.test(a.route)) {
+    if (CATCH_ALL_ROUTE_RE.test(a.route)) {
       return 1
     }
-    if (catchAllRouteRE.test(b.route)) {
+    if (CATCH_ALL_ROUTE_RE.test(b.route)) {
       return -1
     }
     return slashCount(a.route) - slashCount(b.route)
@@ -193,68 +274,56 @@ async function resolveRoutes(ctx: Context) {
 
     for (let i = 0; i < pathNodes.length; i++) {
       const node = pathNodes[i]
-      const isDynamic = dynamicRouteRE.test(node)
-      const isCatchAll = catchAllRouteRE.test(node)
-      const normalizedName = normalizeCase(
-        isDynamic
-          ? isCatchAll
-            ? "all"
-            : node.replace(dynamicRouteRE, "$1")
-          : node,
-      )
-      const normalizedPath = normalizeCase(normalizedName)
-      route.name += route.name ? `-${normalizedName}` : normalizedName
-
+      const { name, path } = buildRoutePathAndName(node)
+      route.path += path
+      route.name += route.name ? `-${name}` : name
       const parent = parentRoutes.find((node) => node.name === route.name)
       if (parent) {
         parent.children = parent.children || []
         parentRoutes = parent.children
-      }
-
-      if (normalizedPath === "index") {
-        route.path += "/"
-        route.exact = true
-      } else if (isDynamic) {
-        if (isCatchAll) {
-          route.path += "/(.*)"
-        } else {
-          route.path += `/:${normalizedName}`
-        }
-      } else {
-        route.path += `/${normalizedPath}`
       }
     }
 
     parentRoutes.push(route)
   })
 
-  const finalRoutes = prepareRoutes(routes)
+  const finalRoutes = prepareReactRoutes(routes)
   const code = generateCode(finalRoutes)
+  // TODO:
+  // debugger
   return code
 }
 
-type PreparedRoute = Exclude<Route, "children"> & {
-  module: string
-  routes?: Array<PreparedRoute>
+interface ReactRouterRoute extends Omit<Route, "name" | "children"> {
+  /**
+   * <Route exact />
+   * @default false
+   */
+  exact?: boolean
+  /**
+   * child routes
+   * @default []
+   */
+  routes?: Array<ReactRouterRoute>
 }
 
-function prepareRoutes(routes: Array<Route>): Array<PreparedRoute> {
-  const res: Array<PreparedRoute> = []
+function prepareReactRoutes(routes: Array<Route>): Array<ReactRouterRoute> {
+  const res: Array<ReactRouterRoute> = []
   for (const route of routes) {
-    const newRoute: PreparedRoute = {
-      ...route,
-      module: route.component,
-    }
+    const { name, children, ...rawRoute } = route
+    const newRoute: ReactRouterRoute = { ...rawRoute, exact: false }
     if (route.children) {
-      newRoute.routes = prepareRoutes(route.children)
-      delete newRoute.children
+      newRoute.routes = prepareReactRoutes(route.children)
+    }
+    if (route.path.endsWith("/")) {
+      newRoute.exact = true
     }
     res.push(newRoute)
   }
   return res
 }
 
-function generateCode(routes: Array<PreparedRoute>) {
+function generateCode(routes: Array<ReactRouterRoute>) {
   const { imports, stringRoutes } = stringifyRoutes(routes)
   imports.push('import React from "react"')
   return `${imports.join(
@@ -262,14 +331,14 @@ function generateCode(routes: Array<PreparedRoute>) {
   )};\n\nconst routes = ${stringRoutes};\n\nexport default routes;`
 }
 
-function stringifyRoutes(preparedRoutes: Array<PreparedRoute>) {
+function stringifyRoutes(preparedRoutes: Array<ReactRouterRoute>) {
   const componentRE = /"(?:element|component)": ("(.*?)")/g
-  const moduleRE = /"(?:module)": ("(.*?)")/g
   const imports: Array<string> = []
 
-  const stringRoutes = JSON.stringify(preparedRoutes, null, 2)
-    .replace(componentRE, componentReplacer)
-    .replace(moduleRE, moduleReplacer)
+  const stringRoutes = JSON.stringify(preparedRoutes, null, 2).replace(
+    componentRE,
+    componentReplacer,
+  )
 
   return {
     imports,
@@ -284,18 +353,6 @@ function stringifyRoutes(preparedRoutes: Array<PreparedRoute>) {
   ) {
     const importName = "route" + offset
     const importStr = `import ${importName} from "${path}"`
-    if (!imports.includes(importStr)) imports.push(importStr)
-    return str.replace(replaceStr, importName)
-  }
-
-  function moduleReplacer(
-    str: string,
-    replaceStr: string,
-    path: string,
-    offset: number,
-  ) {
-    const importName = "module" + offset
-    const importStr = `import * as ${importName} from "${path}"`
     if (!imports.includes(importStr)) imports.push(importStr)
     return str.replace(replaceStr, importName)
   }
