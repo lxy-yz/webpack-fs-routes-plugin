@@ -1,8 +1,4 @@
-Update readme for build & release
+~~Support RR 5~~
 
-Extend CRA
-
-- https://github.com/arackaf/customize-cra
-- https://create-react-app.dev/docs/getting-started/#selecting-a-template
-
-Support RR v6/5.
+- Support RR 6
+- Update readme for build & release
