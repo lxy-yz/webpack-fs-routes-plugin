@@ -4,7 +4,7 @@ import "./App.css"
 
 import { BrowserRouter } from "react-router-dom"
 import { renderRoutes } from "react-router-config"
-import routes from "~fs-routes.js"
+import routes from "~fs-routes"
 
 console.log("routes", routes)
 

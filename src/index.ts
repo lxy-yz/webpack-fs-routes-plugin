@@ -10,7 +10,8 @@ export const FsRoutesPlugin = createUnplugin<UserOptions>((options) => {
   // Include file extension to avoid being processed by file loader fallback in CRA
   // otherwise would not be needed i.e. custom webpack config.
   // https://github.com/facebook/create-react-app/blob/eee8491d57d67dd76f0806a7512eaba2ce9c36f0/packages/react-scripts/config/webpack.config.js#L509
-  const VIRTUAL_ROUTE_IDS = ["~fs-routes.js", "~fs-routes.ts"]
+  const VIRTUAL_ROUTE_IDS = ["~fs-routes"]
+  const ESM_EXTENSION = ".mjs"
 
   const ctx = new Context(options)
 
@@ -24,11 +25,12 @@ export const FsRoutesPlugin = createUnplugin<UserOptions>((options) => {
     resolveId(id, importer) {
       if (!VIRTUAL_ROUTE_IDS.includes(id)) return null
       ctx.emit("importRoutes", importer)
-      return id
+      return id + ESM_EXTENSION
     },
 
     async load(id) {
-      if (!VIRTUAL_ROUTE_IDS.includes(id)) return null
+      if (!VIRTUAL_ROUTE_IDS.map((s) => s + ESM_EXTENSION).includes(id))
+        return null
       return ctx.resolveRoutes()
     },
 
@@ -128,10 +130,10 @@ class Context extends EventEmitter {
 
   _addRoute(route: string) {
     // Example:
-    //   importer: <rootDir>/_virtual_~fs-routes.js
-    //   importee: import Route53 from './src/pages/index.tsx'
+    //   importer: <rootDir>/_virtual_~fs-routes.mjs
+    //   importee: import Route53 from '<rootDir>/src/pages/index.tsx'
     this.routeMap.set(route, {
-      path: "./" + route,
+      path: route,
       route: path
         .relative(this._routesDir, route)
         .replace(path.extname(route), ""),
@@ -145,7 +147,7 @@ class Context extends EventEmitter {
   async _getFiles(dir: string) {
     const res: Array<string> = []
     for (const filename of await fsp.readdir(dir)) {
-      const file = path.join(dir, filename)
+      const file = path.resolve(dir, filename)
       const stat = await fsp.lstat(file)
 
       if (stat.isDirectory()) {
