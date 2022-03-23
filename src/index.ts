@@ -190,7 +190,7 @@ async function resolveRoutes(ctx: Context) {
     } else {
       normalizedPathNode = `/${normalizedPathNode}`
     }
-    return { name: normalizedName, path: normalizedPathNode }
+    return { name: normalizedName.toLowerCase(), path: normalizedPathNode }
   }
 
   const fsRoutes = [...routeMap.values()].sort((a, b) => {
