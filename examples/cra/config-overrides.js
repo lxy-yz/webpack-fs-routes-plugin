@@ -5,7 +5,7 @@ module.exports = function override(config, env) {
   config.resolve.plugins = []
   config.plugins = (config.plugins || []).concat([
     Lib({
-      isDev: true,
+      isDev: env === 'development',
     }),
   ])
   return config

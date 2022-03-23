@@ -8,11 +8,12 @@ export interface UserOptions {
    * Supported file extensions for page routes
    * @default ['.tsx']
    */
-  routeExtensions?: Array<string>
+  routeExtensions?: string[]
   /**
    * Development build
+   * @default false
    */
-  isDev: boolean
+  isDev?: boolean
   /**
    * @default false
    */
@@ -20,7 +21,7 @@ export interface UserOptions {
   /**
    * @default 5
    */
-  reactRouterVersion?: number
+  reactRouterVersion?: 5 | 6
 }
 
 export interface Route {
@@ -40,10 +41,10 @@ export interface Route {
    * child routes
    * @default []
    */
-  children?: Array<Route>
+  children?: Route[]
 }
 
-export interface ReactRouterRoute extends Omit<Route, "name" | "children"> {
+export interface ReactRouterRoute extends Omit<Route, 'name' | 'children'> {
   /**
    * <Route exact />
    * @default false
@@ -53,5 +54,5 @@ export interface ReactRouterRoute extends Omit<Route, "name" | "children"> {
    * child routes
    * @default []
    */
-  routes?: Array<ReactRouterRoute>
+  routes?: ReactRouterRoute[]
 }
