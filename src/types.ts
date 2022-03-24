@@ -24,6 +24,11 @@ export interface UserOptions {
   reactRouterVersion?: 5 | 6
 }
 
+export interface FsRoute {
+  path: string
+  route: string
+}
+
 export interface Route {
   /**
    * name or identifier of current route
@@ -36,23 +41,52 @@ export interface Route {
   /**
    * import specifier of <Route component />
    */
-  component: string
+  component?: string
   /**
    * child routes
    * @default []
    */
   children?: Route[]
+  rawRoute?: string
 }
 
-export interface ReactRouterRoute extends Omit<Route, 'name' | 'children'> {
+export type ReactRouterRoute = ReactRouterRouteV5 | ReactRouterRouteV6
+
+export interface ReactRouterRouteV5 extends Omit<Route, 'name' | 'children'> {
   /**
    * <Route exact />
    * @default false
    */
   exact?: boolean
   /**
-   * child routes
+   * v5 child routes
    * @default []
    */
-  routes?: ReactRouterRoute[]
+  routes?: ReactRouterRouteV5[]
+}
+
+export interface ReactRouterRouteV6 {
+  /**
+   * <Route caseSensitive />
+   * @default false
+   */
+  caseSensitive?: boolean
+  /**
+   * <Route path />
+   */
+  path?: string
+  /**
+   * <Route index />
+   * @default false
+   */
+  index?: boolean
+  /**
+   * import specifier of <Route element />
+   */
+  element?: string
+  /**
+   * v6 child routes
+   * @default []
+   */
+  children?: ReactRouterRouteV6[]
 }

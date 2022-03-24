@@ -4,7 +4,7 @@ import EventEmitter from 'events'
 import chokidar from 'chokidar'
 import { createUnplugin } from 'unplugin'
 
-import type { ReactRouterRoute, Route, UserOptions } from './types'
+import type { FsRoute, ReactRouterRoute, ReactRouterRouteV5, ReactRouterRouteV6, Route, UserOptions } from './types'
 
 // Include file extension to avoid being processed by file loader fallback in CRA
 // otherwise would not be needed i.e. using custom webpack config.
@@ -42,7 +42,7 @@ export const FsRoutesPlugin = createUnplugin<UserOptions>((options) => {
     async load(id) {
       if (!VIRTUAL_ROUTE_IDS.map(s => s + ESM_EXTENSION).includes(id))
         return null
-      return ctx.resolveRoutes(caseSensitive)
+      return ctx.resolveRoutes(caseSensitive, reactRouterVersion === 5)
     },
 
     // custom hooks for webpack
@@ -95,8 +95,11 @@ class Context extends EventEmitter {
     this._searchGlob()
   }
 
-  resolveRoutes(caseSensitive: boolean) {
-    return new V5RouteResolver(caseSensitive).resolveRoutes(this.routeMap)
+  resolveRoutes(caseSensitive: boolean, isV5 = false) {
+    if (isV5)
+      return new V5RouteResolver(caseSensitive).resolveRoutes([...this.routeMap.values()])
+    else
+      return new V6RouteResolver(caseSensitive).resolveRoutes([...this.routeMap.values()])
   }
 
   // TODO: use glob instead of fs.readdir to exclude test files
@@ -178,29 +181,211 @@ abstract class RouteResolver {
     this.caseSensitive = caseSenstive
   }
 
-  abstract resolveRoutes(routeMap: Map<string, { path: string; route: string }>): Promise<string>
+  async resolveRoutes(fsRoutes: FsRoute[]) {
+    const routes = this.prepareRoutes(fsRoutes)
+    const normalizedRoutes = this.normalizeRoutes(routes)
+    const code = this.generateCode(normalizedRoutes)
+    return code
+  }
+
+  abstract prepareRoutes(fsRoutes: FsRoute[]): Route[]
+  abstract normalizeRoutes(routes: Route[]): ReactRouterRoute[]
+  abstract generateCode(routes: ReactRouterRoute[]): string
 
   normalizeCase(str: string) {
     return this.caseSensitive ? str : str.toLowerCase()
+  }
+
+  normalizeRouteName(node: string) {
+    const res = this.isDynamicRoute(node)
+      ? this.isCatchAllRoute(node)
+        ? 'all'
+        : node.replace(DYNAMIC_ROUTE_RE, '$1')
+      : node
+    return res.toLowerCase()
   }
 
   isIndexRoute(node: string) {
     return this.normalizeCase(node) === 'index'
   }
 
+  isDynamicRoute(node: string) {
+    return DYNAMIC_ROUTE_RE.test(node)
+  }
+
+  isCatchAllRoute(node: string) {
+    return CATCH_ALL_ROUTE_RE.test(node)
+  }
+}
+
+class V6RouteResolver extends RouteResolver {
+  prepareRoutes(fsRoutes: FsRoute[]) {
+    const res: Route[] = []
+    for (const fsRoute of this.sortRoutes(fsRoutes)) {
+      let parentRoutes = res
+      const pathNodes = fsRoute.route.split('/')
+      let name = ''
+      for (let i = 0; i < pathNodes.length; i++) {
+        const node = pathNodes[i]
+        name += name ? `-${this.normalizeRouteName(node)}` : this.normalizeRouteName(node)
+        const route: Route = {
+          name,
+          path: '',
+          rawRoute: pathNodes.slice(0, i + 1).join('/'),
+        }
+
+        if (i === pathNodes.length - 1)
+          route.component = fsRoute.path
+
+        if (!this.isIndexRoute(node))
+          route.path = this.normalizeRoutePath(node)
+
+        const parent = parentRoutes.find((parent) => {
+          return pathNodes.slice(0, i).join('/') === parent.rawRoute
+        })
+        if (parent) {
+          parent.children = parent.children || []
+          parentRoutes = parent.children
+        }
+
+        const exits = parentRoutes.some((parent) => {
+          return pathNodes.slice(0, i + 1).join('/') === parent.rawRoute
+        })
+        if (!exits)
+          parentRoutes.push(route)
+      }
+    }
+    return res
+  }
+
+  normalizeRoutes(routes: Route[]): ReactRouterRouteV6[] {
+    const res: ReactRouterRouteV6[] = []
+    for (const route of routes) {
+      const { name, component, children, ...rawRoute } = route
+      const newRoute: ReactRouterRouteV6 = { ...rawRoute, element: component, caseSensitive: this.caseSensitive }
+      if (children)
+        newRoute.children = this.normalizeRoutes(children)
+      if (name.endsWith('index')) {
+        newRoute.index = true
+        delete newRoute.path
+      }
+      res.push(newRoute)
+    }
+    return res
+  }
+
+  sortRoutes(routes: FsRoute[]): FsRoute[] {
+    return [...routes].sort((a, b) => slashCount(a.route) - slashCount(b.route))
+  }
+
+  normalizeRoutePath(node: string) {
+    const path = this.normalizeRouteName(node)
+    if (this.isDynamicRoute(node)) {
+      if (this.isCatchAllRoute(node))
+        return '*'
+
+      return `:${path}`
+    }
+    return `${path}`
+  }
+
   generateCode(routes: ReactRouterRoute[]) {
-    const { imports, stringRoutes } = this.stringifyRoutes(routes)
+    const componentRE = /"(?:element)": ("(.*?)")/g
+    const imports: string[] = []
+
+    const stringRoutes = JSON.stringify(routes, null, 2).replace(
+      componentRE,
+      (str: string, replaceStr: string, path: string, offset: number) => {
+        const importName = `route${offset}`
+        const importStr = `import ${importName} from "${path}"`
+        if (!imports.includes(importStr)) imports.push(importStr)
+        return str.replace(replaceStr, `React.createElement(${importName})`)
+      },
+    )
+
     imports.push('import React from "react"')
     return `${imports.join(
       ';\n',
     )};\n\nconst routes = ${stringRoutes};\n\nexport default routes;`
   }
+}
 
-  stringifyRoutes(preparedRoutes: ReactRouterRoute[]) {
-    const componentRE = /"(?:element|component)": ("(.*?)")/g
+class V5RouteResolver extends RouteResolver {
+  prepareRoutes(fsRoutes: FsRoute[]) {
+    const res: Route[] = []
+    for (const fsRoute of this.sortRoutes(fsRoutes)) {
+      const route: Route = {
+        path: '',
+        name: '',
+        component: fsRoute.path,
+      }
+      let parentRoutes = res
+      const pathNodes = fsRoute.route.split('/')
+
+      for (let i = 0; i < pathNodes.length; i++) {
+        const node = pathNodes[i]
+        const name = this.normalizeRouteName(node)
+        const path = this.normalizeRoutePath(node)
+        route.path += path
+        route.name += route.name ? `-${name}` : name
+
+        const parent = parentRoutes.find(node => node.name === route.name)
+        if (parent) {
+          parent.children = parent.children || []
+          parentRoutes = parent.children
+        }
+      }
+      parentRoutes.push(route)
+    }
+    return res
+  }
+
+  sortRoutes(routes: FsRoute[]): FsRoute[] {
+    return [...routes].sort((a, b) => {
+      // parent route first, catchall route last
+      if (CATCH_ALL_ROUTE_RE.test(a.route))
+        return 1
+
+      if (CATCH_ALL_ROUTE_RE.test(b.route))
+        return -1
+
+      return slashCount(a.route) - slashCount(b.route)
+    })
+  }
+
+  normalizeRoutePath(node: string) {
+    if (this.isIndexRoute(node))
+      return '/'
+
+    const path = this.normalizeCase(this.normalizeRouteName(node))
+    if (this.isDynamicRoute(node)) {
+      if (this.isCatchAllRoute(node))
+        return '/(.*)'
+      else
+        return `/:${path}`
+    }
+    return `/${path}`
+  }
+
+  normalizeRoutes(routes: Route[]): ReactRouterRouteV5[] {
+    const res: ReactRouterRouteV5[] = []
+    for (const route of routes) {
+      const { name, children, ...rawRoute } = route
+      const newRoute: ReactRouterRouteV5 = { ...rawRoute }
+      if (children)
+        newRoute.routes = this.normalizeRoutes(children)
+      if (name.endsWith('index'))
+        newRoute.exact = true
+      res.push(newRoute)
+    }
+    return res
+  }
+
+  generateCode(routes: ReactRouterRoute[]) {
+    const componentRE = /"(?:component)": ("(.*?)")/g
     const imports: string[] = []
 
-    const stringRoutes = JSON.stringify(preparedRoutes, null, 2).replace(
+    const stringRoutes = JSON.stringify(routes, null, 2).replace(
       componentRE,
       (str: string, replaceStr: string, path: string, offset: number) => {
         const importName = `route${offset}`
@@ -210,98 +395,13 @@ abstract class RouteResolver {
       },
     )
 
-    return {
-      imports,
-      stringRoutes,
-    }
+    imports.push('import React from "react"')
+    return `${imports.join(
+      ';\n',
+    )};\n\nconst routes = ${stringRoutes};\n\nexport default routes;`
   }
 }
 
-class V5RouteResolver extends RouteResolver {
-  async resolveRoutes(routeMap: Map<string, { path: string; route: string }>) {
-    const fsRoutes = [...routeMap.values()].sort((a, b) => {
-      // parent route first, catchall route last
-      const slashCount = (s: string) => s.split('/').filter(Boolean).length
-      if (CATCH_ALL_ROUTE_RE.test(a.route))
-        return 1
-
-      if (CATCH_ALL_ROUTE_RE.test(b.route))
-        return -1
-
-      return slashCount(a.route) - slashCount(b.route)
-    })
-    const routes: Route[] = []
-
-    fsRoutes.forEach((fsRoute) => {
-      const pathNodes = fsRoute.route.split('/')
-      let parentRoutes = routes
-      const route: Route = {
-        path: '',
-        name: '',
-        component: fsRoute.path,
-      }
-
-      for (let i = 0; i < pathNodes.length; i++) {
-        const node = pathNodes[i]
-        const { name, path } = this._buildRoutePathAndName(node)
-        route.path += path
-        route.name += route.name ? `-${name}` : name
-        const parent = parentRoutes.find(node => node.name === route.name)
-        if (parent) {
-          parent.children = parent.children || []
-          parentRoutes = parent.children
-        }
-      }
-
-      parentRoutes.push(route)
-    })
-
-    const finalRoutes = this._prepareReactRoutes(routes)
-    const code = this.generateCode(finalRoutes)
-    // TODO:
-    // debugger
-    return code
-  }
-
-  private _buildRoutePathAndName(node: string) {
-    const isDynamic = DYNAMIC_ROUTE_RE.test(node)
-    const isCatchAll = CATCH_ALL_ROUTE_RE.test(node)
-    const normalizedName = isDynamic
-      ? isCatchAll
-        ? 'all'
-        : node.replace(DYNAMIC_ROUTE_RE, '$1')
-      : node
-    let normalizedPathNode = this.normalizeCase(normalizedName)
-    if (this.isIndexRoute(node)) {
-      normalizedPathNode = '/'
-    }
-    else if (isDynamic) {
-      if (isCatchAll)
-        normalizedPathNode = '/(.*)'
-
-      else
-        normalizedPathNode = `/:${normalizedPathNode}`
-    }
-    else {
-      normalizedPathNode = `/${normalizedPathNode}`
-    }
-    return { name: normalizedName.toLowerCase(), path: normalizedPathNode }
-  }
-
-  private _prepareReactRoutes(routes: Route[]): ReactRouterRoute[] {
-    const res: ReactRouterRoute[] = []
-    for (const route of routes) {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { name, children, ...rawRoute } = route
-      const newRoute: ReactRouterRoute = { ...rawRoute, exact: false }
-      if (route.children)
-        newRoute.routes = this._prepareReactRoutes(route.children)
-
-      if (route.path.endsWith('/'))
-        newRoute.exact = true
-
-      res.push(newRoute)
-    }
-    return res
-  }
+function slashCount(s: string) {
+  return s.split('/').filter(Boolean).length
 }

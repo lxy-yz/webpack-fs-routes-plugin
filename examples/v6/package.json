@@ -1,5 +1,5 @@
 {
-  "name": "example",
+  "name": "example-v6",
   "version": "0.1.0",
   "private": true,
   "dependencies": {
@@ -13,8 +13,7 @@
     "my-ts-lib": "workspace:*",
     "react": "^17.0.2",
     "react-dom": "^17.0.2",
-    "react-router-config": "^5.1.1",
-    "react-router-dom": "^5.2.0",
+    "react-router-dom": "^6.2.1",
     "react-scripts": "5.0.0",
     "typescript": "^4.6.2",
     "web-vitals": "^2.1.4"
@@ -44,8 +43,6 @@
     ]
   },
   "devDependencies": {
-    "@types/react-router-config": "^5.0.6",
-    "@types/react-router-dom": "^5.3.3",
     "react-app-rewired": "^2.2.1"
   }
 }

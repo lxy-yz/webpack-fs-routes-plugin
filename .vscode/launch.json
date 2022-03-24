@@ -1,0 +1,26 @@
+{
+  // Use IntelliSense to learn about possible attributes.
+  // Hover to view descriptions of existing attributes.
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "pwa-node",
+      "request": "launch",
+      "name": "example v5",
+      "skipFiles": ["<node_internals>/**"],
+      "program": "${workspaceFolder}/examples/v5/node_modules/react-app-rewired/bin/index.js",
+      "args": ["start"],
+      "cwd": "${workspaceFolder}/examples/v5"
+    },
+      {
+      "type": "pwa-node",
+      "request": "launch",
+      "name": "example v6",
+      "skipFiles": ["<node_internals>/**"],
+      "program": "${workspaceFolder}/examples/v6/node_modules/react-app-rewired/bin/index.js",
+      "args": ["start"],
+      "cwd": "${workspaceFolder}/examples/v6"
+    }
+  ]
+}

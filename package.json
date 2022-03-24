@@ -23,12 +23,13 @@
   },
   "types": "./dist/index.d.ts",
   "scripts": {
+    "dev": "pnpm run build-fast -- --watch --sourcemap",
     "build-fast": "tsup src/index.ts --format cjs,esm",
     "build": "pnpm run build-fast -- --dts-resolve",
     "test": "vitest run",
     "prepublishOnly": "pnpm run build",
-    "example:start": "pnpm --filter example start",
-    "dev": "pnpm run build-fast -- --watch --sourcemap"
+    "example:v5:start": "pnpm --filter example-v5 start",
+    "example:v6:start": "pnpm --filter example-v6 start"
   },
   "license": "MIT",
   "devDependencies": {
@@ -39,7 +40,7 @@
   },
   "dependencies": {
     "chokidar": "^3.5.3",
-    "unplugin": "^0.5.2"
+    "unplugin": "https://github.com/lxy-yz/unplugin#fork"
   },
   "eslintConfig": {
     "extends": "@antfu",
