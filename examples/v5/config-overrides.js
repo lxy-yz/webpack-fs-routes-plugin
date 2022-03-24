@@ -1,4 +1,4 @@
-const Lib = require("my-ts-lib").default
+const Lib = require("webpack-fs-routes-plugin").default
 
 module.exports = function override(config, env) {
   //do stuff with the webpack config...

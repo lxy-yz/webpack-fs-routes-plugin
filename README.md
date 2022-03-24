@@ -1,4 +1,4 @@
-**💛 You can help the author become a full-time open-source maintainer by [sponsoring him on GitHub](https://github.com/sponsors/egoist).**
+# webpack-fs-routes-plugin
 
 Next.js style file system routes https://nextjs.org/docs/routing/introduction.
 
@@ -19,36 +19,63 @@ Next.js style file system routes https://nextjs.org/docs/routing/introduction.
     ```
 </details>
 
----
-
-# my-ts-lib
-
-[![npm version](https://badgen.net/npm/v/my-ts-lib)](https://npm.im/my-ts-lib) [![npm downloads](https://badgen.net/npm/dm/my-ts-lib)](https://npm.im/my-ts-lib)
-
-## Using this template
-
-- Search `my-ts-lib` and replace it with your custom package name.
-- Search `egoist` and replace it with your name.
-
-Features:
-
-- Package manager [pnpm](https://pnpm.js.org/), safe and fast
-- Release with [semantic-release](https://npm.im/semantic-release)
-- Bundle with [tsup](https://github.com/egoist/tsup)
-- Test with [vitest](https://vitest.dev)
-
-To skip CI (GitHub action), add `skip-ci` to commit message. To skip release, add `skip-release` to commit message.
-
 ## Install
 
 ```bash
-npm i my-ts-lib
+npm i webpack-fs-routes-plugin
 ```
+
+## Usage
+
+```ts
+import WebpackFsRoutesPlugin from 'webpack-fs-routes-plugin'
+
+export interface UserOptions {
+  /**
+   * The path to the directory containing your page routes
+   * @default <rootDir>/src/pages
+   */
+  routesDir?: string
+  /**
+   * Supported file extensions for page routes
+   * @default ['.tsx']
+   */
+  routeExtensions?: string[]
+  /**
+   * Development build
+   * @default false
+   */
+  isDev?: boolean
+  /**
+   * @default false
+   */
+  caseSensitive?: boolean
+  /**
+   * @default 5
+   */
+  reactRouterVersion?: 5 | 6
+}
+const options: UserOptions = {}
+
+export default {
+  // ...
+  plugins: [
+    WebpackFsRoutesPlugin(options),
+  ],
+}
+```
+
+Or checkout `config-overrides.js` in examples/.
+
+---
+
+[![npm version](https://badgen.net/npm/v/webpack-fs-routes-plugin)](https://npm.im/webpack-fs-routes-plugin) [![npm downloads](https://badgen.net/npm/dm/webpack-fs-routes-plugin)](https://npm.im/webpack-fs-routes-plugin)
+
 
 ## Sponsors
 
-[![sponsors](https://sponsors-images.egoist.sh/sponsors.svg)](https://github.com/sponsors/egoist)
+[![sponsors](https://sponsors-images.lxy-yz.sh/sponsors.svg)](https://github.com/sponsors/lxy-yz)
 
 ## License
 
-MIT &copy; [EGOIST](https://github.com/sponsors/egoist)
+MIT &copy; [lxy-yz](https://github.com/sponsors/lxy-yz)
