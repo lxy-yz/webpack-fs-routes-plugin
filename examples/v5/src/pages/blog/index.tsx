@@ -3,8 +3,8 @@ import { Link } from 'react-router-dom'
 
 const Component: React.FC = () => {
   return (
-    <>
-      <p>blog/index.vue</p>
+    <div>
+      <p>blog/index.tsx</p>
       <Link to="/blog/1b234bk12b3">
         id: 1b234bk12b3
       </Link> |
@@ -14,7 +14,7 @@ const Component: React.FC = () => {
       <Link to="/blog/today/xxx">
         not exit
       </Link>
-    </>
+    </div>
   )
 }
 

@@ -11,7 +11,9 @@ console.log("routes", routes)
 function App() {
   return (
     <BrowserRouter>
-      {renderRoutes(routes)}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', height: '100px'}}>
+        {renderRoutes(routes)}
+      </div>
 
       <div className="App">
         <header className="App-header">

@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom'
 const index: React.FC = () => {
   return (
     <div>
-      <p>index.vue</p>
+      <p>index.tsx</p>
       <Link to="/blog">
         blog
       </Link> |

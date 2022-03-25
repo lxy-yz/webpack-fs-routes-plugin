@@ -13,7 +13,10 @@ console.log("routes", routes)
 function App() {
   return (
     <BrowserRouter>
-      <Routes />
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', height: '100px'}}>
+        <Routes />
+      </div>
+
       <div className="App">
         <header className="App-header">
           <img src={logo} className="App-logo" alt="logo" />
