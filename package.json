@@ -1,7 +1,7 @@
 {
   "name": "webpack-fs-routes-plugin",
-  "version": "0.0.0",
-  "description": "My awesome typescript library",
+  "version": "0.0.1",
+  "description": "webpack plugin to generate routes from file system",
   "publishConfig": {
     "access": "public"
   },
@@ -33,21 +33,25 @@
   },
   "license": "MIT",
   "devDependencies": {
+    "@antfu/eslint-config": "^0.18.8",
     "tsup": "5.11.13",
     "typescript": "4.5.4",
-    "vitest": "0.2.5",
-    "@antfu/eslint-config": "^0.18.8"
+    "vitest": "0.2.5"
   },
   "dependencies": {
     "chokidar": "^3.5.3",
+    "fast-glob": "^3.2.11",
     "unplugin": "https://github.com/lxy-yz/unplugin#fork"
   },
   "eslintConfig": {
     "extends": "@antfu",
     "rules": {
-      "@typescript-eslint/array-type": ["error", {
-        "default": "array"
-      }]
+      "@typescript-eslint/array-type": [
+        "error",
+        {
+          "default": "array"
+        }
+      ]
     }
   }
 }

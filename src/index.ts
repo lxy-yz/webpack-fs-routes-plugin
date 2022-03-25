@@ -1,8 +1,10 @@
 import path from 'path'
 import fsp from 'fs/promises'
 import EventEmitter from 'events'
+
 import chokidar from 'chokidar'
 import { createUnplugin } from 'unplugin'
+import fg from 'fast-glob'
 
 import type { FsRoute, ReactRouterRoute, ReactRouterRouteV5, ReactRouterRouteV6, Route, UserOptions } from './types'
 
@@ -102,7 +104,6 @@ class Context extends EventEmitter {
       return new V6RouteResolver(caseSensitive).resolveRoutes([...this.routeMap.values()])
   }
 
-  // TODO: use glob instead of fs.readdir to exclude test files
   private async _searchGlob() {
     for (const route of await this._getFiles(this._routesDir))
       await this._addRoute(route)
@@ -153,20 +154,14 @@ class Context extends EventEmitter {
   }
 
   private async _getFiles(dir: string) {
-    const res: string[] = []
-    for (const filename of await fsp.readdir(dir)) {
-      const file = path.resolve(dir, filename)
-      const stat = await fsp.lstat(file)
+    const ext = this._routeExtensions.length > 1 ? `{${this._routeExtensions.join(',')}}` : this._routeExtensions[0] || ''
 
-      if (stat.isDirectory()) {
-        res.push(...(await this._getFiles(file)))
-      }
-      else if (stat.isFile()) {
-        if (this._routeExtensions.includes(path.extname(file)))
-          res.push(file)
-      }
-    }
-    return res
+    const files = fg.sync(path.join(dir, `**/*${ext}`), {
+      ignore: ['node_modules', '.git', '**/__*__/**'],
+      onlyFiles: true,
+    })
+
+    return files
   }
 }
 
