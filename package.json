@@ -26,22 +26,22 @@
     "dev": "pnpm run build-fast -- --watch --sourcemap",
     "build-fast": "tsup src/index.ts --format cjs,esm",
     "build": "pnpm run build-fast -- --dts-resolve",
-    "test": "vitest run",
+    "test": "vitest",
     "prepublishOnly": "pnpm run build",
     "example:v5:start": "pnpm --filter example-v5 start",
     "example:v6:start": "pnpm --filter example-v6 start"
   },
   "license": "MIT",
   "devDependencies": {
-    "@antfu/eslint-config": "^0.18.8",
+    "@antfu/eslint-config": "^0.18.9",
     "tsup": "5.11.13",
     "typescript": "4.5.4",
-    "vitest": "0.2.5"
+    "vitest": "0.7.12"
   },
   "dependencies": {
     "chokidar": "^3.5.3",
     "fast-glob": "^3.2.11",
-    "unplugin": "https://github.com/lxy-yz/unplugin#fork"
+    "unplugin": "github:lxy-yz/unplugin#fork"
   },
   "eslintConfig": {
     "extends": "@antfu",

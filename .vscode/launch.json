@@ -13,7 +13,7 @@
       "args": ["start"],
       "cwd": "${workspaceFolder}/examples/v5"
     },
-      {
+    {
       "type": "pwa-node",
       "request": "launch",
       "name": "example v6",
@@ -21,6 +21,15 @@
       "program": "${workspaceFolder}/examples/v6/node_modules/react-app-rewired/bin/index.js",
       "args": ["start"],
       "cwd": "${workspaceFolder}/examples/v6"
+    },
+    {
+      "type": "pwa-node",
+      "request": "launch",
+      "name": "vitest",
+      "skipFiles": ["<node_internals>/**"],
+      "program": "${workspaceFolder}/node_modules/vitest/vitest.mjs",
+      "args": ["--globals"],
+      "cwd": "${workspaceFolder}"
     }
   ]
 }
