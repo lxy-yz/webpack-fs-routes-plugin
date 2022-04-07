@@ -8,11 +8,9 @@ import fg from 'fast-glob'
 
 import type { FsRoute, ReactRouterRoute, ReactRouterRouteV5, ReactRouterRouteV6, Route, UserOptions } from './types'
 
-// Include file extension to avoid being processed by file loader fallback in CRA
-// otherwise would not be needed i.e. using custom webpack config.
-// https://github.com/facebook/create-react-app/blob/eee8491d57d67dd76f0806a7512eaba2ce9c36f0/packages/react-scripts/config/webpack.config.js#L509
 const VIRTUAL_ROUTE_IDS = ['~fs-routes']
 const ESM_EXTENSION = '.mjs'
+const RESOLVE_ROUTES = 'resolve-routes'
 
 export const FsRoutesPlugin = createUnplugin<UserOptions>((options) => {
   const {
@@ -37,7 +35,7 @@ export const FsRoutesPlugin = createUnplugin<UserOptions>((options) => {
 
     resolveId(id, importer) {
       if (!VIRTUAL_ROUTE_IDS.includes(id)) return null
-      ctx.emit('importRoutes', importer)
+      ctx.emit(RESOLVE_ROUTES, importer)
       return id + ESM_EXTENSION
     },
 
@@ -89,7 +87,7 @@ class Context extends EventEmitter {
         })
       })
 
-      this.once('importRoutes', (importer) => {
+      this.once(RESOLVE_ROUTES, (importer) => {
         this._routesImporter = importer
       })
     }
@@ -138,9 +136,6 @@ class Context extends EventEmitter {
   }
 
   private _addRoute(route: string) {
-    // Example:
-    //   importer: <rootDir>/_virtual_~fs-routes.mjs
-    //   importee: import Route53 from '<rootDir>/src/pages/index.tsx'
     this.routeMap.set(route, {
       path: route,
       route: path
