@@ -3,6 +3,7 @@ import fsp from 'fs/promises'
 import EventEmitter from 'events'
 
 import chokidar from 'chokidar'
+import type { UnpluginInstance } from 'unplugin'
 import { createUnplugin } from 'unplugin'
 import fg from 'fast-glob'
 
@@ -12,7 +13,7 @@ const VIRTUAL_ROUTE_IDS = ['~fs-routes']
 const ESM_EXTENSION = '.mjs'
 const RESOLVE_ROUTES = 'resolve-routes'
 
-export const FsRoutesPlugin = createUnplugin<UserOptions>((options) => {
+const FsRoutesPlugin = createUnplugin<UserOptions>((options) => {
   const {
     routesDir = path.join(process.cwd(), 'src/pages'),
     routeExtensions = ['.tsx'],
@@ -50,7 +51,8 @@ export const FsRoutesPlugin = createUnplugin<UserOptions>((options) => {
   }
 })
 
-export default FsRoutesPlugin.webpack
+const FsRoutesWebpackPlugin: UnpluginInstance<UserOptions>['webpack'] = FsRoutesPlugin.webpack
+export default FsRoutesWebpackPlugin
 
 //////////////////////////////////////////////////////////////////////
 class Context extends EventEmitter {
