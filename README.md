@@ -69,7 +69,7 @@ Or checkout `config-overrides.js` in examples/.
 
 ---
 
-[![npm version](https://badgen.net/npm/v/webpack-fs-routes-plugin)](https://npm.im/webpack-fs-routes-plugin) [![npm downloads](https://badgen.net/npm/dm/webpack-fs-routes-plugin)](https://npm.im/webpack-fs-routes-plugin)
+<!-- [![npm version](https://badgen.net/npm/v/webpack-fs-routes-plugin)](https://npm.im/webpack-fs-routes-plugin) [![npm downloads](https://badgen.net/npm/dm/webpack-fs-routes-plugin)](https://npm.im/webpack-fs-routes-plugin) -->
 
 
 ## Sponsors
