@@ -5,18 +5,18 @@ Next.js style file system routes https://nextjs.org/docs/routing/introduction.
 <details>
   <summary>Examples</summary>
   
-    ```
-    index route
-        pages/index.js → /
-        pages/blog/index.js → /blog
-    nested route
-        pages/blog/first-post.js → /blog/first-post
-        pages/dashboard/settings/username.js → /dashboard/settings/username
-    dynamic route
-        pages/blog/[slug].js → /blog/:slug (/blog/hello-world)
-        pages/[username]/settings.js → /:username/settings (/foo/settings)
-        pages/post/[...all].js → /post/* (/post/2020/id/title)
-    ```
+  <pre>
+index route
+    pages/index.js → /
+    pages/blog/index.js → /blog
+nested route
+    pages/blog/first-post.js → /blog/first-post
+    pages/dashboard/settings/username.js → /dashboard/settings/username
+dynamic route
+    pages/blog/[slug].js → /blog/:slug (/blog/hello-world)
+    pages/[username]/settings.js → /:username/settings (/foo/settings)
+    pages/post/[...all].js → /post/* (/post/2020/id/title)
+  </pre>
 </details>
 
 ## Install
