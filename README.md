@@ -15,8 +15,7 @@ nested route
 dynamic route
     pages/blog/[slug].js → /blog/:slug (/blog/hello-world)
     pages/[username]/settings.js → /:username/settings (/foo/settings)
-    pages/post/[...all].js → /post/* (/post/2020/id/title)
-  </pre>
+    pages/post/[...all].js → /post/* (/post/2020/id/title)</pre>
 </details>
 
 ## Install
